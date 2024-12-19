@@ -102,17 +102,28 @@ free_port() {
 
 free_port $PORT
 start_gunicorn() {
-  while true; do
+  MAX_ATTEMPTS=3
+  attempt=0
+  while [ $attempt -lt $MAX_ATTEMPTS ]; do
+    ((attempt++))
     source venv/bin/activate
-    echo "Running Gunicorn..." | tee -a $LOG
+    echo "Running Gunicorn attempt #$attempt..." | tee -a $LOG
     $APP_DIR/venv/bin/gunicorn --workers 3 --bind localhost:$PORT testPrj.wsgi:application || {
-      echo "Gunicorn terminated with an error. Restarting..." | tee -a $LOG
+      echo "Gunicorn terminated with an error. Attempt #$attempt failed. Restarting..." | tee -a $LOG
     }
     deactivate
-    sleep 3
+    if [ $attempt -lt $MAX_ATTEMPTS ]; then
+      sleep 3
+    fi
   done
+
+  if [ $attempt -ge $MAX_ATTEMPTS ]; then
+    echo "Gunicorn failed to start after $MAX_ATTEMPTS attempts. Exiting..." | tee -a $LOG
+    exit 1
+  fi
 }
 
+export PYTHONPATH=$APP_DIR/testPrj:$PYTHONPATH
 start_gunicorn &
 APP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT)
 echo "You can check this url: http://localhost:$PORT  or  http://127.0.0.1:$PORT"
