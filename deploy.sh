@@ -136,7 +136,9 @@ fi
 
 exit 0
 
-#chmod +x deploy.sh
-#./deploy.sh ПОРТ                                             (sudo)
-#чтобы выключить скрипт напишите                              ps aux | grep gunicorn
-#далле найдите PID (числа после root) скопируйте и напишите   kill <PID>
+#chmod +x <название файла>.sh
+#./<название файла>.sh                                              (sudo)
+
+
+#чтобы выключить скрипт напишите                                    ps aux | grep gunicorn
+#далле найдите PID (числа после root) скопируйте и напишите         kill <PID>
