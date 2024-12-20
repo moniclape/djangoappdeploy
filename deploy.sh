@@ -2,10 +2,10 @@
 
 GIT_REPO="https://github.com/DireSky/OSEExam.git"
 APP_NAME="OSEExam"
-APP_DIR="/var/www/$APP_NAME/testPrj"
-PYTHON="python3.13"
+APP_DIR="/var/www/$APP_NAME"
+PYTHON="python3"
 DATE=$(date +"%Y-%m-%d_%H-%M-%S")
-PORT=8002
+PORT=$1
 
 LOG="/var/log/deploying.log"
 echo "Django app starting: $DATE" >> $LOG
@@ -17,6 +17,11 @@ fi
 
 apt update && apt install -y $PYTHON $PYTHON-venv git curl net-tools || {
   echo "Package installation error" | tee -a $LOG
+  exit 1
+}
+
+apt update && apt install -y python3-pip || {
+  echo "pip installation error" | tee -a $LOG
   exit 1
 }
 
@@ -40,8 +45,10 @@ fi
 
 source venv/bin/activate
 
-if [ -f "requirements.txt" ]; then
-  pip install -r requirements.txt || {
+if [ -f "$APP_DIR/testPrj/requirements.txt" ]; then
+  pip install Django
+  pip install gunicorn
+  pip install whitenoise || {
     echo "Dependency installation error" | tee -a $LOG
     deactivate
     exit 1
@@ -53,19 +60,19 @@ fi
 deactivate
 
 source venv/bin/activate
-python manage.py migrate || {
+python $APP_DIR/testPrj/manage.py migrate || {
   echo "Migration execution error" | tee -a $LOG
   deactivate
   exit 1
 }
-python manage.py collectstatic --noinput || {
+python $APP_DIR/testPrj/manage.py collectstatic --noinput || {
   echo "Static files build error" | tee -a $LOG
   deactivate
   exit 1
 }
 deactivate
 
-SETTINGS_FILE="$APP_DIR/testPrj/settings.py"
+SETTINGS_FILE="$APP_DIR/testPrj/testPrj/settings.py"
 
 if ! grep -q "whitenoise.middleware.WhiteNoiseMiddleware" "$SETTINGS_FILE"; then
   echo "Adding WhiteNoise middleware to settings.py" | tee -a $LOG
@@ -100,27 +107,18 @@ free_port() {
   fi
 }
 
+PORT=8001
 free_port $PORT
 start_gunicorn() {
-  MAX_ATTEMPTS=3
-  attempt=0
-  while [ $attempt -lt $MAX_ATTEMPTS ]; do
-    ((attempt++))
+  while true; do
     source venv/bin/activate
-    echo "Running Gunicorn attempt #$attempt..." | tee -a $LOG
-    $APP_DIR/venv/bin/gunicorn --workers 3 --bind localhost:$PORT testPrj.wsgi:application || {
-      echo "Gunicorn terminated with an error. Attempt #$attempt failed. Restarting..." | tee -a $LOG
+    echo "Running Gunicorn..." | tee -a $LOG
+    $APP_DIR/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:$PORT testPrj.wsgi:application || {
+      echo "Gunicorn terminated with an error. Restarting..." | tee -a $LOG
     }
     deactivate
-    if [ $attempt -lt $MAX_ATTEMPTS ]; then
-      sleep 3
-    fi
+    sleep 3
   done
-
-  if [ $attempt -ge $MAX_ATTEMPTS ]; then
-    echo "Gunicorn failed to start after $MAX_ATTEMPTS attempts. Exiting..." | tee -a $LOG
-    exit 1
-  fi
 }
 
 export PYTHONPATH=$APP_DIR/testPrj:$PYTHONPATH
@@ -137,8 +135,4 @@ fi
 exit 0
 
 #chmod +x <название файла>.sh
-#./<название файла>.sh                                              (sudo)
-
-
-#чтобы выключить скрипт напишите                                    ps aux | grep gunicorn
-#далле найдите PID (числа после root) скопируйте и напишите         kill <PID>
+#./<название файла>.sh   (sudo)
